@@ -2,33 +2,25 @@ import json
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
 from pydantic import BaseModel
 
 app = FastAPI()
+
+# Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# -------------------- FILE STORAGE --------------------
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-
-
-# TEMPORARY STORAGE
 STUDENTS_FILE = "students.json"
+PROCTORING_FILE = "proctoring_logs.json"
 
+# Load students
 if os.path.exists(STUDENTS_FILE):
     with open(STUDENTS_FILE, "r") as f:
         try:
@@ -38,8 +30,7 @@ if os.path.exists(STUDENTS_FILE):
 else:
     students_db = []
 
-PROCTORING_FILE = "proctoring_logs.json"
-
+# Load proctoring logs
 if os.path.exists(PROCTORING_FILE):
     with open(PROCTORING_FILE, "r") as f:
         try:
@@ -49,12 +40,14 @@ if os.path.exists(PROCTORING_FILE):
 else:
     proctoring_logs = []
 
+# -------------------- MODELS --------------------
 
 class Student(BaseModel):
     name: str
     email: str
     role: str
 
+# -------------------- APIs --------------------
 
 @app.post("/register")
 def register_student(student: Student):
@@ -68,7 +61,6 @@ def register_student(student: Student):
         "total_students": len(students_db)
     }
 
-
 @app.get("/students")
 def get_students():
     return {
@@ -79,10 +71,10 @@ def get_students():
 @app.post("/login")
 def login_student(email: str):
     for student in students_db:
-        if student.email == email:
+        if student["email"] == email:
             return {
-                "message": f"Login successful as {student.role}",
-                "role": student.role,
+                "message": f"Login successful as {student['role']}",
+                "role": student["role"],
                 "student": student
             }
     raise HTTPException(status_code=404, detail="Student not found")
@@ -90,30 +82,38 @@ def login_student(email: str):
 @app.post("/start_exam")
 def start_exam(email: str):
     for student in students_db:
-        if student.email == email:
+        if student["email"] == email:
             return {
                 "message": "Exam started",
-                "student": student.email,
+                "student": student["email"],
                 "status": "monitoring"
             }
     raise HTTPException(status_code=404, detail="Student not found")
+
 @app.post("/flag_event")
 def flag_event(email: str, event: str):
     log = {
         "email": email,
         "event": event
     }
+
     proctoring_logs.append(log)
+
+    with open(PROCTORING_FILE, "w") as f:
+        json.dump(proctoring_logs, f, indent=4)
+
     return {
         "message": "Event flagged",
         "log": log
     }
+
 @app.get("/proctoring_logs")
 def get_proctoring_logs():
     return {
         "total_events": len(proctoring_logs),
         "logs": proctoring_logs
     }
+
 @app.get("/risk_score")
 def get_risk_score(email: str):
     count = 0
@@ -133,6 +133,7 @@ def get_risk_score(email: str):
         "risk_score": count,
         "risk_level": level
     }
+
 @app.post("/review_decision")
 def review_decision(email: str, decision: str):
     return {
@@ -140,12 +141,6 @@ def review_decision(email: str, decision: str):
         "final_decision": decision,
         "reviewed_by": "faculty"
     }
-@app.post("/review_decision")
-def review_decision(email: str, decision: str):
-    return {
-        "email": email,
-        "final_decision": decision,
-        "reviewed_by": "faculty"
-    }
+
 
 
