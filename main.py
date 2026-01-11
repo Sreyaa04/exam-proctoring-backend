@@ -46,6 +46,13 @@ class Student(BaseModel):
 
 
 # ---------- AUTH ----------
+@app.get("/")
+def home():
+    return {
+        "message": "AI Exam Proctoring Backend is running",
+        "docs": "/docs"
+    }
+
 
 @app.post("/register")
 def register_student(student: Student):
