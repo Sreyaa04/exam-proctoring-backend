@@ -1,12 +1,12 @@
 import json
 import os
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI()
 
-# Enable CORS (for React)
+# Allow React + browsers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,56 +15,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ------------------------
-# File storage
-# ------------------------
 STUDENTS_FILE = "students.json"
-LOGS_FILE = "proctoring_logs.json"
+PROCTORING_FILE = "proctoring_logs.json"
 
-def load_file(file):
-    if os.path.exists(file):
-        with open(file, "r") as f:
-            try:
-                return json.load(f)
-            except:
-                return []
-    return []
+# Load students
+if os.path.exists(STUDENTS_FILE):
+    with open(STUDENTS_FILE, "r") as f:
+        try:
+            students_db = json.load(f)
+        except:
+            students_db = []
+else:
+    students_db = []
 
-def save_file(file, data):
-    with open(file, "w") as f:
-        json.dump(data, f, indent=4)
+# Load logs
+if os.path.exists(PROCTORING_FILE):
+    with open(PROCTORING_FILE, "r") as f:
+        try:
+            proctoring_logs = json.load(f)
+        except:
+            proctoring_logs = []
+else:
+    proctoring_logs = []
 
-students_db = load_file(STUDENTS_FILE)
-proctoring_logs = load_file(LOGS_FILE)
 
-# ------------------------
-# Models
-# ------------------------
 class Student(BaseModel):
     name: str
     email: str
     role: str
 
-# ------------------------
-# Routes
-# ------------------------
+
+# ---------- AUTH ----------
 
 @app.post("/register")
-def register(student: Student):
+def register_student(student: Student):
     students_db.append(student.dict())
-    save_file(STUDENTS_FILE, students_db)
+    with open(STUDENTS_FILE, "w") as f:
+        json.dump(students_db, f, indent=4)
 
     return {
         "message": "Student registered successfully",
         "total_students": len(students_db)
     }
 
-@app.get("/students")
-def get_students():
-    return students_db
 
 @app.post("/login")
-def login(email: str = Query(...)):
+def login_student(email: str):
     for student in students_db:
         if student["email"] == email:
             return {
@@ -75,8 +71,19 @@ def login(email: str = Query(...)):
 
     raise HTTPException(status_code=404, detail="Student not found")
 
+
+@app.get("/students")
+def get_students():
+    return {
+        "total_students": len(students_db),
+        "students": students_db
+    }
+
+
+# ---------- EXAM ----------
+
 @app.post("/start_exam")
-def start_exam(email: str = Query(...)):
+def start_exam(email: str):
     for student in students_db:
         if student["email"] == email:
             return {
@@ -86,24 +93,35 @@ def start_exam(email: str = Query(...)):
             }
     raise HTTPException(status_code=404, detail="Student not found")
 
-@app.post("/flag_event")
-def flag_event(email: str = Query(...), event: str = Query(...)):
-    log = {
-        "email": email,
-        "event": event
-    }
-    proctoring_logs.append(log)
-    save_file(LOGS_FILE, proctoring_logs)
 
-    return {"message": "Event logged", "log": log}
+@app.post("/flag_event")
+def flag_event(email: str, event: str):
+    log = {"email": email, "event": event}
+    proctoring_logs.append(log)
+
+    with open(PROCTORING_FILE, "w") as f:
+        json.dump(proctoring_logs, f, indent=4)
+
+    return {
+        "message": "Event flagged",
+        "log": log
+    }
+
 
 @app.get("/proctoring_logs")
-def get_logs():
-    return proctoring_logs
+def get_proctoring_logs():
+    return {
+        "total_events": len(proctoring_logs),
+        "logs": proctoring_logs
+    }
+
 
 @app.get("/risk_score")
-def risk_score(email: str):
-    count = sum(1 for log in proctoring_logs if log["email"] == email)
+def get_risk_score(email: str):
+    count = 0
+    for log in proctoring_logs:
+        if log["email"] == email:
+            count += 1
 
     if count <= 1:
         level = "LOW"
@@ -116,4 +134,13 @@ def risk_score(email: str):
         "email": email,
         "risk_score": count,
         "risk_level": level
+    }
+
+
+@app.post("/review_decision")
+def review_decision(email: str, decision: str):
+    return {
+        "email": email,
+        "final_decision": decision,
+        "reviewed_by": "faculty"
     }
