@@ -5,6 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI()
+@app.get("/")
+def home():
+    return {
+        "message": "AI Exam Proctoring Backend is running",
+        "docs": "/docs"
+    }
+
 
 # Allow React + browsers
 app.add_middleware(
